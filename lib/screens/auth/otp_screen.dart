@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import '../../services/auth_service.dart';
-import '../home_screen.dart';
+import '../main_screen.dart';
 import 'register_screen.dart';
 
 class OTPScreen extends StatelessWidget {

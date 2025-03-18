@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import 'register_screen.dart';
 import 'otp_screen.dart';
-import '../home_screen.dart';
+import '../main_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   final _emailController = TextEditingController();

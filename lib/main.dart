@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/auth/otp_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/main_screen.dart';
 import 'services/auth_service.dart';
 
 void main() async {
@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
               return LoginScreen();
             } else {
               // Token is valid, navigate to HomeScreen
-              return HomeScreen();
+              return MainScreen();
             }
           }
 
@@ -50,7 +50,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => LoginScreen(),
         '/register': (context) => RegisterScreen(),
         '/otp': (context) => OTPScreen(),
-        '/home': (context) => HomeScreen(),
+        '/home': (context) => MainScreen(),
       },
     );
   }

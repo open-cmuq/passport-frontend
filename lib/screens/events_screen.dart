@@ -1,17 +1,15 @@
-// lib/screens/home_screen.dart
+// lib/screens/events_screen.dart
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:provider/provider.dart';
-import '../../services/auth_service.dart';
 import '../../services/event_service.dart';
 import '../../models/event_model.dart';
 
-class HomeScreen extends StatefulWidget {
+class EventsScreen extends StatefulWidget {
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  _EventsScreenState createState() => _EventsScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _EventsScreenState extends State<EventsScreen> {
   late Future<List<Event>> _eventsFuture;
   final int _limit = 50;
 
@@ -23,7 +21,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadEvents() async {
     setState(() {
-      // TODO Deal with errors if we can't fetch events gracefully
       _eventsFuture = EventService.getEvents(limit: _limit);
     });
   }
@@ -37,15 +34,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Events'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () async {
-              await AuthService.logout();
-              Navigator.pushReplacementNamed(context, '/login');
-            },
-          ),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refreshEvents,
@@ -91,7 +79,6 @@ class EventCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Event Name
             Text(
               event.name,
               style: TextStyle(
@@ -101,8 +88,6 @@ class EventCard extends StatelessWidget {
               ),
             ),
             SizedBox(height: 8),
-
-            // Event Description
             Text(
               event.description,
               style: TextStyle(
@@ -111,8 +96,6 @@ class EventCard extends StatelessWidget {
               ),
             ),
             SizedBox(height: 12),
-
-            // Event Location
             Text(
               '📍 ${event.location}',
               style: TextStyle(
@@ -121,8 +104,6 @@ class EventCard extends StatelessWidget {
               ),
             ),
             SizedBox(height: 8),
-
-            // Event Date and Time
             Text(
               '📅 ${_formatDate(event.startTime)} - ${_formatDate(event.endTime)}',
               style: TextStyle(
@@ -131,27 +112,20 @@ class EventCard extends StatelessWidget {
               ),
             ),
             SizedBox(height: 12),
-
-            // Attend Button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[700],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: () {
-                    Fluttertoast.showToast(msg: 'Added "${event.name}" to your calendar');
-                  },
-                  child: Text(
-                    'Attend',
-                    style: TextStyle(color: Colors.white),
-                  ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
-              ],
+              ),
+              onPressed: () {
+                Fluttertoast.showToast(msg: 'Added "${event.name}" to your calendar');
+              },
+              child: Text(
+                'Attend',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
@@ -159,7 +133,6 @@ class EventCard extends StatelessWidget {
     );
   }
 
-  // Helper function to format date and time
   String _formatDate(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
