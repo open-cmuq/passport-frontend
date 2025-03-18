@@ -68,4 +68,51 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
   }
+
+  static Map<String, dynamic>? decodeToken(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) {
+        return null;
+      }
+      final payload = _decodeBase64(parts[1]);
+      final payloadMap = jsonDecode(payload);
+      if (payloadMap is Map<String, dynamic>) {
+        return payloadMap;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Helper method to decode Base64
+  static String _decodeBase64(String str) {
+    String output = str.replaceAll('-', '+').replaceAll('_', '/');
+
+    switch (output.length % 4) {
+      case 0:
+        break;
+      case 2:
+        output += '==';
+        break;
+      case 3:
+        output += '=';
+        break;
+      default:
+        throw Exception('Illegal base64url string!');
+    }
+
+    return utf8.decode(base64Url.decode(output));
+  }
+
+  // Check if the token is expired
+  static bool isTokenExpired(String token) {
+    final payload = decodeToken(token);
+    if (payload == null || !payload.containsKey('exp')) {
+      return true;
+    }
+    final expiryDate = DateTime.fromMillisecondsSinceEpoch(payload['exp'] * 1000);
+    return expiryDate.isBefore(DateTime.now());
+  }
 }
