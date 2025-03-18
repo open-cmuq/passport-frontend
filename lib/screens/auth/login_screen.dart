@@ -92,6 +92,7 @@ class LoginScreen extends StatelessWidget {
                       Fluttertoast.showToast(msg: 'Invalid email or password');
                     }
                   } catch (e) {
+                    print(e);
                     // Handle network or server errors
                     Fluttertoast.showToast(msg: 'An error occurred: ${e.toString()}');
                   }
