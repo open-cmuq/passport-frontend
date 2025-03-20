@@ -4,7 +4,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../services/auth_service.dart';
 import 'otp_screen.dart';
-import '../home_screen.dart';
+import '../main_screen.dart';
 
 class RegisterScreen extends StatelessWidget {
   final _nameController = TextEditingController();
