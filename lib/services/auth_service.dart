@@ -1,24 +1,36 @@
 // lib/services/auth_service.dart
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'api_service.dart';
-import 'dart:convert'; // Add this import
+import 'dart:convert';
 
 class AuthService {
-  static const String _tokenKey = 'auth_token';
+  static const String _accessTokenKey = 'auth_access_token';
+  static const String _refreshTokenKey = 'auth_refresh_token';
 
-  static Future<bool> login(String email, String password) async {
-    final response = await ApiService.post('/login', {'email': email, 'password': password});
-    if (response.statusCode == 200) {
-      final token = jsonDecode(response.body)['token'];
-      await _saveToken(token);
-      return true;
+  
+  static Future<String?> login(String email, String password) async {
+    try {
+      final response = await ApiService.post('/login', {'email': email, 'password': password});
+      
+      if (response.statusCode == 200) {
+        final tokens = jsonDecode(response.body);
+        await _saveTokens(tokens['access_token'], tokens['refresh_token']);
+        return null; // No error means success
+      } else if (response.statusCode == 401) {
+        // Parse the error message from backend
+        final errorResponse = jsonDecode(response.body);
+        return errorResponse['error'] ?? 'Invalid email or password';
+      } else {
+        return 'An unexpected error occurred (${response.statusCode})';
+      }
+    } catch (e) {
+      return 'Network error: ${e.toString()}';
     }
-    return false;
   }
 
   static Future<bool> register(String name, String email, String password) async {
-    // Validate email domain in Flutter (optional, but recommended for immediate feedback)
     final validEmail = RegExp(r'^[a-zA-Z0-9._%+-]+@(andrew\.cmu\.edu|qatar\.cmu\.edu|cmu\.edu)$');
     if (!validEmail.hasMatch(email)) {
       throw Exception("Email must be from @andrew.cmu.edu, @qatar.cmu.edu, or @cmu.edu");
@@ -32,11 +44,9 @@ class AuthService {
 
     if (response.statusCode == 200) {
       if (dotenv.get('ENV') == 'development') {
-        // In development, directly save the token
-        final token = jsonDecode(response.body)['token'];
-        await _saveToken(token);
+        final tokens = jsonDecode(response.body);
+        await _saveTokens(tokens['access_token'], tokens['refresh_token']);
       } else {
-        // In production, expect an OTP to be sent
         print("OTP sent for verification");
       }
       return true;
@@ -47,26 +57,66 @@ class AuthService {
   static Future<bool> verifyOTP(String email, String otp) async {
     final response = await ApiService.post('/verify-OTP', {'email': email, 'otp': otp});
     if (response.statusCode == 200) {
-      final token = jsonDecode(response.body)['token'];
-      await _saveToken(token);
+      final tokens = jsonDecode(response.body);
+      await _saveTokens(tokens['access_token'], tokens['refresh_token']);
       return true;
     }
     return false;
   }
 
-  static Future<void> _saveToken(String token) async {
+  static Future<void> _saveTokens(String accessToken, String refreshToken) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
+    await prefs.setString(_accessTokenKey, accessToken);
+    await prefs.setString(_refreshTokenKey, refreshToken);
   }
 
-  static Future<String?> getToken() async {
+  static Future<String?> getAccessToken() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    return prefs.getString(_accessTokenKey);
+  }
+
+  static Future<String?> getRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_refreshTokenKey);
   }
 
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
+    await prefs.remove(_accessTokenKey);
+    await prefs.remove(_refreshTokenKey);
+  }
+
+  static Future<bool> refreshToken() async {
+    final refreshToken = await getRefreshToken();
+    if (refreshToken == null || isAccessTokenExpired(refreshToken)) {
+      debugPrint("We have no refresh token or our refreshToken is expired");
+      return false;
+    }
+
+    try {
+      final response = await ApiService.post('/refresh-token', {
+        'refresh_token': refreshToken
+      });
+      
+      if (response.statusCode == 200) {
+        final tokens = jsonDecode(response.body);
+        await _saveTokens(tokens['access_token'], refreshToken);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static bool isAccessTokenExpired(String? token) {
+    if (token == null ) return false;
+    final payload = decodeToken(token);
+    if (payload == null || !payload.containsKey('exp')) {
+      return true;
+    }
+    final expiryDate = DateTime.fromMillisecondsSinceEpoch(payload['exp'] * 1000);
+    return expiryDate.isBefore(DateTime.now());
   }
 
   static Map<String, dynamic>? decodeToken(String token) {
@@ -86,7 +136,6 @@ class AuthService {
     }
   }
 
-  // Helper method to decode Base64
   static String _decodeBase64(String str) {
     String output = str.replaceAll('-', '+').replaceAll('_', '/');
 
@@ -106,13 +155,14 @@ class AuthService {
     return utf8.decode(base64Url.decode(output));
   }
 
-  // Check if the token is expired
-  static bool isTokenExpired(String token) {
-    final payload = decodeToken(token);
-    if (payload == null || !payload.containsKey('exp')) {
-      return true;
+  static Future<bool> areTokensExpired() async {
+    final accessToken = await getAccessToken();
+    final refreshToken = await getRefreshToken();
+
+    if (accessToken == null && refreshToken == null) {
+      return false; 
     }
-    final expiryDate = DateTime.fromMillisecondsSinceEpoch(payload['exp'] * 1000);
-    return expiryDate.isBefore(DateTime.now());
+
+    return isAccessTokenExpired(accessToken) && isAccessTokenExpired(refreshToken);
   }
 }

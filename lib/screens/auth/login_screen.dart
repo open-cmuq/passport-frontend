@@ -79,22 +79,28 @@ class LoginScreen extends StatelessWidget {
                 onPressed: () async {
                   final email = _emailController.text.trim();
                   final password = _passwordController.text.trim();
+                  
                   if (email.isEmpty || password.isEmpty) {
                     Fluttertoast.showToast(msg: 'Please fill all fields');
                     return;
                   }
 
-                  try {
-                    final success = await AuthService.login(email, password);
-                    if (success) {
-                      Navigator.pushReplacementNamed(context, '/home');
-                    } else {
-                      Fluttertoast.showToast(msg: 'Invalid email or password');
-                    }
-                  } catch (e) {
-                    print(e);
-                    // Handle network or server errors
-                    Fluttertoast.showToast(msg: 'An error occurred: ${e.toString()}');
+                  final errorMessage = await AuthService.login(email, password);
+                  
+                  if (errorMessage == null) {
+                    // Success case
+                    Navigator.pushReplacementNamed(context, '/home');
+                  } else {
+                    // Show specific error message from backend
+                    Fluttertoast.showToast(
+                      msg: errorMessage,
+                      toastLength: Toast.LENGTH_LONG,
+                      gravity: ToastGravity.BOTTOM,
+                      backgroundColor: Colors.red,
+                      textColor: Colors.white
+                    );
+                    // Clear password field on error
+                    _passwordController.clear();
                   }
                 },
                 child: Text(

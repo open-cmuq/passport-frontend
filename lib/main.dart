@@ -1,5 +1,6 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/auth/login_screen.dart';
@@ -20,29 +21,23 @@ class MyApp extends StatelessWidget {
       title: 'EcoCampus',
       theme: ThemeData(primarySwatch: Colors.green),
       home: FutureBuilder<String?>(
-        future: AuthService.getToken(),
+        future: _getValidToken(),
         builder: (context, snapshot) {
-          // Show a loading indicator while checking the token
+          debugPrint("Loading init point");
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
 
-          // If the token exists and is valid, navigate to HomeScreen
+          // If we have a valid token (either existing or refreshed)
           if (snapshot.hasData && snapshot.data != null) {
-            final token = snapshot.data!;
-            if (AuthService.isTokenExpired(token)) {
-              // Token is expired, log out and navigate to LoginScreen
-              AuthService.logout();
-              return LoginScreen();
-            } else {
-              // Token is valid, navigate to HomeScreen
-              return MainScreen();
-            }
+            debugPrint("Going to mainscreen");  // More reliable than print()
+            return MainScreen();
           }
 
-          // No token or token is invalid, navigate to LoginScreen
+          // If no valid token could be obtained
+          debugPrint("Going to login");
           return LoginScreen();
         },
       ),
@@ -53,5 +48,28 @@ class MyApp extends StatelessWidget {
         '/home': (context) => MainScreen(),
       },
     );
+  }
+
+  Future<String?> _getValidToken() async {
+    final token = await AuthService.getAccessToken();
+    
+    // If no token exists at all
+    if (token == null) return null;
+    
+    debugPrint("Checking in main if isAccessTokenExpired");
+    // If token is still valid
+    if (!AuthService.isAccessTokenExpired(token)) return token;
+    debugPrint("It isn't, attempt to refresh it");
+    // Attempt to refresh token
+    try {
+      final refreshed = await AuthService.refreshToken();
+      if (refreshed) {
+        debugPrint("Successfully refreshed on the main dart");
+        return await AuthService.getAccessToken();
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 }
