@@ -7,7 +7,7 @@ import 'auth_service.dart';
 
 class EventService {
   static Future<List<Event>> getEvents({int limit = 50}) async {
-    final token = await AuthService.getToken(); // Retrieve the token
+    final token = await AuthService.getAccessToken(); // Retrieve the token
     if (token == null) {
       throw Exception('User is not authenticated');
     }
