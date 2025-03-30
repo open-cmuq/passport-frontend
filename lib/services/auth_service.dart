@@ -8,6 +8,8 @@ import 'dart:convert';
 class AuthService {
   static const String _accessTokenKey = 'auth_access_token';
   static const String _refreshTokenKey = 'auth_refresh_token';
+  static bool _isRefreshing = false;
+  static bool _refreshFailed = false;
 
   
   static Future<String?> login(String email, String password) async {
@@ -87,6 +89,11 @@ class AuthService {
   }
 
   static Future<bool> refreshToken() async {
+    // Prevent multiple concurrent refresh attempts
+    if (_isRefreshing) return false;
+    if (_refreshFailed) return false;
+
+    _isRefreshing = true;
     final refreshToken = await getRefreshToken();
     if (refreshToken == null || isAccessTokenExpired(refreshToken)) {
       debugPrint("We have no refresh token or our refreshToken is expired");
@@ -94,18 +101,33 @@ class AuthService {
     }
 
     try {
-      final response = await ApiService.post('/refresh-token', {
-        'refresh_token': refreshToken
-      });
+      final refreshToken = await getRefreshToken();
+      if (refreshToken == null || isAccessTokenExpired(refreshToken)) {
+        debugPrint("Refresh token invalid or expired");
+        _refreshFailed = true;
+        return false;
+      }
+
+      final response = await ApiService.post(
+        '/refresh-token',
+        {'refresh_token': refreshToken},
+        skipAuthRetry: true // Important! Don't retry refresh token calls
+      );
       
       if (response.statusCode == 200) {
         final tokens = jsonDecode(response.body);
         await _saveTokens(tokens['access_token'], refreshToken);
+        _refreshFailed = false;
         return true;
+      } else {
+        _refreshFailed = true;
+        return false;
       }
-      return false;
     } catch (e) {
+      _refreshFailed = true;
       return false;
+    } finally {
+      _isRefreshing = false;
     }
   }
 

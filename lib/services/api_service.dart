@@ -5,7 +5,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
 import 'auth_service.dart';
 
-
 class TokenExpiredException implements Exception {
   final String message;
   TokenExpiredException(this.message);
@@ -20,10 +19,31 @@ class ApiService {
     return await _makeRequest(() => http.get(url, headers: headers));
   }
 
-  static Future<http.Response> post(String endpoint, Map<String, dynamic> body, {String? token}) async {
+  static Future<http.Response> post(String endpoint, Map<String, dynamic> body, {String? token, bool skipAuthRetry = false}) async {
     final url = Uri.parse('$_baseUrl$endpoint');
     final headers = await _getHeaders(token);
-    return await _makeRequest(() => http.post(url, headers: headers, body: jsonEncode(body)));
+    final bodyJson = jsonEncode(body);
+    return await _makeRequest(
+      () => http.post(url, headers: headers, body: bodyJson),
+      requestBody: bodyJson,
+      skipAuthRetry: skipAuthRetry,
+    );
+  }
+
+  static Future<http.Response> put(String endpoint, Map<String, dynamic> body, {String? token}) async {
+    final url = Uri.parse('$_baseUrl$endpoint');
+    final headers = await _getHeaders(token);
+    final bodyJson = jsonEncode(body);
+    return await _makeRequest(
+      () => http.put(url, headers: headers, body: bodyJson),
+      requestBody: bodyJson,
+    );
+  }
+
+  static Future<http.Response> delete(String endpoint, {String? token}) async {
+    final url = Uri.parse('$_baseUrl$endpoint');
+    final headers = await _getHeaders(token);
+    return await _makeRequest(() => http.delete(url, headers: headers));
   }
 
   static Future<Map<String, String>> _getHeaders(String? token) async {
@@ -42,73 +62,54 @@ class ApiService {
 
     return headers;
   }
-  //
-  // static Future<http.Response> _makeRequest(Future<http.Response> Function() request) async {
-  //   final accessToken = await AuthService.getAccessToken();
-  //   final refreshToken = await AuthService.getRefreshToken();
-  //
-  //   // Check if both tokens are expired
-  //   if (await AuthService.areTokensExpired()) {
-  //     throw TokenExpiredException('Both tokens are expired. Please log in again.');
-  //   }
-  //
-  //   // Check if the access token is expired and refresh it if necessary
-  //   if (AuthService.isAccessTokenExpired(accessToken)) {
-  //     final refreshed = await AuthService.refreshToken();
-  //     if (!refreshed) {
-  //       throw TokenExpiredException('Failed to refresh token. Please log in again.');
-  //     }
-  //   }
-  //
-  //   // Make the request
-  //   final response = await request();
-  //
-  //   // If the request fails with a 401, try refreshing the token and retry
-  //   if (response.statusCode == 401) {
-  //     final refreshed = await AuthService.refreshToken();
-  //     if (refreshed) {
-  //       return await request();
-  //     } else {
-  //       throw TokenExpiredException('Failed to refresh token. Please log in again.');
-  //     }
-  //   }
-  //
-  //   return response;
-  // }
   
-  static Future<http.Response> _makeRequest(Future<http.Response> Function() request) async {
+  static Future<http.Response> _makeRequest(
+    Future<http.Response> Function() request, {
+    String? requestBody,
+    bool skipAuthRetry = false
+  }) async {
     // First attempt the request
     var response = await request();
 
-    if (response.statusCode == 401) {
+    if (response.statusCode == 401 && !skipAuthRetry) {
       debugPrint("Unauthorized request detected, trying to refresh token");
       final refreshed = await AuthService.refreshToken();
       
       if (refreshed) {
         debugPrint("Token refreshed successfully, retrying request");
-        // Get the new access token
         final newAccessToken = await AuthService.getAccessToken();
         
         if (newAccessToken != null) {
-          // Create a new request function with updated headers
-          final newRequest = () async {
-            final headers = await _getHeaders(newAccessToken);
-            // Recreate the original request with new headers
-            if (request is Future<http.Response> Function()) {
-              // For GET requests
-              final originalRequest = request as Future<http.Response> Function();
-              final originalResponse = await originalRequest();
-              final newUrl = originalResponse.request?.url;
-              if (newUrl != null) {
-                return http.get(newUrl, headers: headers);
-              }
-            }
-            // For other methods, you'd need to handle them similarly
-            return request();
-          };
+          // Create new headers with refreshed token
+          final headers = await _getHeaders(newAccessToken);
           
-          // Execute the new request with updated token
-          return await newRequest();
+          // Recreate the original request
+          final originalRequest = response.request;
+          if (originalRequest == null) {
+            throw TokenExpiredException('Failed to recreate request');
+          }
+          
+          // Create a new request based on the original method
+          switch (originalRequest.method) {
+            case 'GET':
+              return await http.get(originalRequest.url, headers: headers);
+            case 'POST':
+              return await http.post(
+                originalRequest.url,
+                headers: headers,
+                body: requestBody, // Use the stored request body
+              );
+            case 'PUT':
+              return await http.put(
+                originalRequest.url,
+                headers: headers,
+                body: requestBody, // Use the stored request body
+              );
+            case 'DELETE':
+              return await http.delete(originalRequest.url, headers: headers);
+            default:
+              throw TokenExpiredException('Unsupported HTTP method');
+          }
         }
       }
       
