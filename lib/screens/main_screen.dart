@@ -1,6 +1,6 @@
 // lib/screens/main_screen.dart
 import 'package:flutter/material.dart';
-import 'events_screen.dart';
+import 'events/events_screen.dart';
 import 'profile_screen.dart';
 import 'awards_screen.dart';
 
