@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'api_service.dart';
 import 'dart:convert';
+import 'user_service.dart';
 
 class AuthService {
   static const String _accessTokenKey = 'auth_access_token';
@@ -11,14 +12,17 @@ class AuthService {
   static bool _isRefreshing = false;
   static bool _refreshFailed = false;
 
-  
   static Future<String?> login(String email, String password) async {
     try {
-      final response = await ApiService.post('/login', {'email': email, 'password': password});
-      
+      final response = await ApiService.post('/login', {
+        'email': email,
+        'password': password,
+      });
+
       if (response.statusCode == 200) {
         final tokens = jsonDecode(response.body);
         await _saveTokens(tokens['access_token'], tokens['refresh_token']);
+        await UserService().cacheCurrentUser();
         return null; // No error means success
       } else if (response.statusCode == 401) {
         // Parse the error message from backend
@@ -32,10 +36,18 @@ class AuthService {
     }
   }
 
-  static Future<bool> register(String name, String email, String password) async {
-    final validEmail = RegExp(r'^[a-zA-Z0-9._%+-]+@(andrew\.cmu\.edu|qatar\.cmu\.edu|cmu\.edu)$');
+  static Future<bool> register(
+    String name,
+    String email,
+    String password,
+  ) async {
+    final validEmail = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@(andrew\.cmu\.edu|qatar\.cmu\.edu|cmu\.edu)$',
+    );
     if (!validEmail.hasMatch(email)) {
-      throw Exception("Email must be from @andrew.cmu.edu, @qatar.cmu.edu, or @cmu.edu");
+      throw Exception(
+        "Email must be from @andrew.cmu.edu, @qatar.cmu.edu, or @cmu.edu",
+      );
     }
 
     final response = await ApiService.post('/register', {
@@ -48,6 +60,8 @@ class AuthService {
       if (dotenv.get('ENV') == 'development') {
         final tokens = jsonDecode(response.body);
         await _saveTokens(tokens['access_token'], tokens['refresh_token']);
+        await UserService().cacheCurrentUser();
+        //TODO Complete impelemntation to redirect and handle OTP stuff
       } else {
         print("OTP sent for verification");
       }
@@ -57,16 +71,23 @@ class AuthService {
   }
 
   static Future<bool> verifyOTP(String email, String otp) async {
-    final response = await ApiService.post('/verify-OTP', {'email': email, 'otp': otp});
+    final response = await ApiService.post('/verify-OTP', {
+      'email': email,
+      'otp': otp,
+    });
     if (response.statusCode == 200) {
       final tokens = jsonDecode(response.body);
       await _saveTokens(tokens['access_token'], tokens['refresh_token']);
+      await UserService().cacheCurrentUser();
       return true;
     }
     return false;
   }
 
-  static Future<void> _saveTokens(String accessToken, String refreshToken) async {
+  static Future<void> _saveTokens(
+    String accessToken,
+    String refreshToken,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_accessTokenKey, accessToken);
     await prefs.setString(_refreshTokenKey, refreshToken);
@@ -111,12 +132,13 @@ class AuthService {
       final response = await ApiService.post(
         '/refresh-token',
         {'refresh_token': refreshToken},
-        skipAuthRetry: true // Important! Don't retry refresh token calls
+        skipAuthRetry: true, // Important! Don't retry refresh token calls
       );
-      
+
       if (response.statusCode == 200) {
         final tokens = jsonDecode(response.body);
         await _saveTokens(tokens['access_token'], refreshToken);
+        await UserService().cacheCurrentUser();
         _refreshFailed = false;
         return true;
       } else {
@@ -132,12 +154,14 @@ class AuthService {
   }
 
   static bool isAccessTokenExpired(String? token) {
-    if (token == null ) return false;
+    if (token == null) return false;
     final payload = decodeToken(token);
     if (payload == null || !payload.containsKey('exp')) {
       return true;
     }
-    final expiryDate = DateTime.fromMillisecondsSinceEpoch(payload['exp'] * 1000);
+    final expiryDate = DateTime.fromMillisecondsSinceEpoch(
+      payload['exp'] * 1000,
+    );
     return expiryDate.isBefore(DateTime.now());
   }
 
@@ -182,9 +206,10 @@ class AuthService {
     final refreshToken = await getRefreshToken();
 
     if (accessToken == null && refreshToken == null) {
-      return false; 
+      return false;
     }
 
-    return isAccessTokenExpired(accessToken) && isAccessTokenExpired(refreshToken);
+    return isAccessTokenExpired(accessToken) &&
+        isAccessTokenExpired(refreshToken);
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/user_model.dart';
 import 'api_service.dart';
@@ -20,7 +21,7 @@ class UserService {
       }
 
       final payload = json.decode(
-        utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
       );
 
       final userId = payload['user_id'];
@@ -30,7 +31,7 @@ class UserService {
 
       // Fetch user data
       final response = await ApiService.get('/users/$userId');
-      
+
       if (response.statusCode == 200) {
         return User.fromJson(json.decode(response.body));
       } else {
@@ -56,7 +57,7 @@ class UserService {
       }
 
       final payload = json.decode(
-        utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
       );
 
       final userId = payload['user_id'];
@@ -76,11 +77,8 @@ class UserService {
       };
 
       // Send update request
-      final response = await ApiService.put(
-        '/users/$userId',
-        updateData,
-      );
-      
+      final response = await ApiService.put('/users/$userId', updateData);
+
       if (response.statusCode == 200) {
         return User.fromJson(json.decode(response.body));
       } else {
@@ -89,6 +87,16 @@ class UserService {
     } catch (e) {
       debugPrint('Error updating user: $e');
       throw Exception('Failed to update user: ${e.toString()}');
+    }
+  }
+
+  Future<void> cacheCurrentUser() async {
+    try {
+      final user = await getCurrentUser();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_data', jsonEncode(user.toJson()));
+    } catch (e) {
+      debugPrint("Failed to cache user data: $e");
     }
   }
 
