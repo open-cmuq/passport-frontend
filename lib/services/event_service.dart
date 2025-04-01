@@ -1,5 +1,6 @@
 // lib/services/event_service.dart
 import 'dart:convert';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/event_model.dart';
 import 'api_service.dart';
@@ -13,7 +14,7 @@ class EventService {
     final token = await AuthService.getAccessToken();
     if (token == null) throw Exception('User is not authenticated');
 
-    String url = '/events?limit=$limit';
+    String url = '/events/?limit=$limit';
     if (beforeTime != null) {
       url += '&before_time=${beforeTime.toIso8601String()}';
     }
@@ -79,7 +80,7 @@ class EventService {
     };
 
     try {
-      final response = await ApiService.post('/events', body, token: token);
+      final response = await ApiService.post('/events/', body, token: token);
       if (response.statusCode == 201) {
         final dynamic data = jsonDecode(response.body);
         return Event.fromJson(data);

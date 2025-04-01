@@ -37,7 +37,7 @@ class User {
       department: json['department'],
       title: json['title'],
       biography: json['biography'],
-      registrationDate: json['registration_date'] != null 
+      registrationDate: json['registration_date'] != null
           ? DateTime.parse(json['registration_date'])
           : null,
     );
@@ -50,6 +50,7 @@ class User {
       'grad_year': gradYear,
       'title': title,
       'biography': biography,
+      'role': role,
       // Include other fields that might be needed for update
       'department': department,
     };
