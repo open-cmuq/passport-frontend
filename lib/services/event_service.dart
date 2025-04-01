@@ -6,14 +6,20 @@ import 'api_service.dart';
 import 'auth_service.dart';
 
 class EventService {
-  static Future<List<Event>> getEvents({int limit = 50}) async {
-    final token = await AuthService.getAccessToken(); // Retrieve the token
-    if (token == null) {
-      throw Exception('User is not authenticated');
+  static Future<List<Event>> getEvents({
+    int limit = 10,
+    DateTime? beforeTime,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    if (token == null) throw Exception('User is not authenticated');
+
+    String url = '/events?limit=$limit';
+    if (beforeTime != null) {
+      url += '&before_time=${beforeTime.toIso8601String()}';
     }
 
     try {
-      final response = await ApiService.get('/events?limit=$limit', token: token); // Pass the token
+      final response = await ApiService.get(url, token: token);
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((json) => Event.fromJson(json)).toList();

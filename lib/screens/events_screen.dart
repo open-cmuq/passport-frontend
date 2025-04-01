@@ -11,67 +11,136 @@ class EventsScreen extends StatefulWidget {
 }
 
 class _EventsScreenState extends State<EventsScreen> {
-  late Future<List<Event>> _eventsFuture;
-  final int _limit = 50;
+  final ScrollController _scrollController = ScrollController();
+  List<Event> _events = [];
+  bool _isLoading = false;
+  bool _hasMore = true;
+  DateTime? _lastEventTime;
+  final int _limit = 10; // Smaller batch size for pagination
 
   @override
   void initState() {
     super.initState();
-    _loadEvents();
+    _loadInitialEvents();
+    _scrollController.addListener(_scrollListener);
   }
 
-  Future<void> _loadEvents() async {
-    setState(() {
-      _eventsFuture = EventService.getEvents(limit: _limit);
-    });
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadInitialEvents() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final newEvents = await EventService.getEvents(limit: _limit);
+      setState(() {
+        _events = newEvents;
+        _isLoading = false;
+        if (newEvents.isNotEmpty) {
+          _lastEventTime = newEvents.last.startTime;
+        }
+        _hasMore = newEvents.length == _limit;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      Fluttertoast.showToast(msg: 'Failed to load events: $e');
+    }
+  }
+
+  Future<void> _loadMoreEvents() async {
+    if (_isLoading || !_hasMore) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final newEvents = await EventService.getEvents(
+        limit: _limit,
+        beforeTime: _lastEventTime,
+      );
+
+      setState(() {
+        _events.addAll(newEvents);
+        _isLoading = false;
+        if (newEvents.isNotEmpty) {
+          _lastEventTime = newEvents.last.startTime;
+        }
+        _hasMore = newEvents.length == _limit;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      Fluttertoast.showToast(msg: 'Failed to load more events: $e');
+    }
+  }
+
+  void _scrollListener() {
+    if (_scrollController.offset >=
+            _scrollController.position.maxScrollExtent &&
+        !_scrollController.position.outOfRange) {
+      _loadMoreEvents();
+    }
   }
 
   Future<void> _refreshEvents() async {
-    await _loadEvents();
+    setState(() {
+      _events = [];
+      _lastEventTime = null;
+      _hasMore = true;
+    });
+    await _loadInitialEvents();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Events'),
         leading: Navigator.canPop(context)
             ? IconButton(
-                icon: Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back, color: theme.primaryColorLight),
                 onPressed: () => Navigator.pop(context),
               )
             : null,
       ),
       body: RefreshIndicator(
+        color: theme.primaryColor,
         onRefresh: _refreshEvents,
-        child: SingleChildScrollView(
-          physics: AlwaysScrollableScrollPhysics(),
-          child: FutureBuilder<List<Event>>(
-            future: _eventsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(child: CircularProgressIndicator());
-              } else if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Container(
-                  height: MediaQuery.of(context).size.height * 0.5,
-                  alignment: Alignment.center,
-                  child: Text('No events found'),
-                );
-              } else {
-                final events = snapshot.data!;
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: NeverScrollableScrollPhysics(),
-                  itemCount: events.length,
-                  itemBuilder: (context, index) {
-                    final event = events[index];
-                    return EventCard(event: event);
-                  },
-                );
-              }
-            },
+        child: _events.isEmpty && !_isLoading
+            ? Center(
+                child: Text('No events found',
+                    style: TextStyle(color: theme.textTheme.bodyLarge?.color)))
+            : ListView.builder(
+                controller: _scrollController,
+                physics: AlwaysScrollableScrollPhysics(),
+                itemCount: _events.length + (_hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index >= _events.length) {
+                    return _buildLoader(theme);
+                  }
+                  return EventCard(
+                    event: _events[index],
+                    theme: theme,
+                  );
+                },
+              ),
+      ),
+    );
+  }
+
+  Widget _buildLoader(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(theme.primaryColor),
           ),
         ),
       ),
@@ -81,11 +150,17 @@ class _EventsScreenState extends State<EventsScreen> {
 
 class EventCard extends StatelessWidget {
   final Event event;
+  final ThemeData theme;
 
-  const EventCard({required this.event});
+  const EventCard({required this.event, required this.theme});
 
   String _formatDate(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  bool get _isEventOngoing {
+    final now = DateTime.now();
+    return now.isAfter(event.startTime) && now.isBefore(event.endTime);
   }
 
   @override
@@ -109,51 +184,89 @@ class EventCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                event.name,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green[800],
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      event.name,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: theme.primaryColorDark,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (_isEventOngoing)
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.primaryColorLight.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: theme.primaryColor),
+                      ),
+                      child: Text(
+                        'LIVE',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.primaryColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               SizedBox(height: 8),
               Text(
                 event.description,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[700],
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.8),
                 ),
               ),
               SizedBox(height: 12),
-              Text(
-                '📍 ${event.location}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 16, color: theme.primaryColor),
+                  SizedBox(width: 4),
+                  Text(
+                    event.location,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: 8),
-              Text(
-                '📅 ${_formatDate(event.startTime)} - ${_formatDate(event.endTime)}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+              Row(
+                children: [
+                  Icon(Icons.calendar_today,
+                      size: 16, color: theme.primaryColor),
+                  SizedBox(width: 4),
+                  Text(
+                    '${_formatDate(event.startTime)} - ${_formatDate(event.endTime)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: 12),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[700],
+                  backgroundColor: _isEventOngoing
+                      ? theme.primaryColor
+                      : theme.primaryColorLight,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 onPressed: () {
-                  Fluttertoast.showToast(msg: 'Added "${event.name}" to your calendar');
+                  Fluttertoast.showToast(
+                    msg: 'Added "${event.name}" to your calendar',
+                    backgroundColor: theme.primaryColor,
+                    textColor: theme.primaryColorLight,
+                  );
                 },
                 child: Text(
-                  'Attend',
+                  _isEventOngoing ? 'Join Now' : 'Attend',
                   style: TextStyle(color: Colors.white),
                 ),
               ),
