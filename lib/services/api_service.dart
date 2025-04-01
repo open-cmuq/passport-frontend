@@ -19,7 +19,12 @@ class ApiService {
     return await _makeRequest(() => http.get(url, headers: headers));
   }
 
-  static Future<http.Response> post(String endpoint, Map<String, dynamic> body, {String? token, bool skipAuthRetry = false}) async {
+  static Future<http.Response> post(
+    String endpoint,
+    Map<String, dynamic> body, {
+    String? token,
+    bool skipAuthRetry = false,
+  }) async {
     final url = Uri.parse('$_baseUrl$endpoint');
     final headers = await _getHeaders(token);
     final bodyJson = jsonEncode(body);
@@ -30,7 +35,11 @@ class ApiService {
     );
   }
 
-  static Future<http.Response> put(String endpoint, Map<String, dynamic> body, {String? token}) async {
+  static Future<http.Response> put(
+    String endpoint,
+    Map<String, dynamic> body, {
+    String? token,
+  }) async {
     final url = Uri.parse('$_baseUrl$endpoint');
     final headers = await _getHeaders(token);
     final bodyJson = jsonEncode(body);
@@ -46,10 +55,24 @@ class ApiService {
     return await _makeRequest(() => http.delete(url, headers: headers));
   }
 
+  static Future<http.Response> patch(
+    String endpoint,
+    Map<String, dynamic> body, {
+    String? token,
+    bool skipAuthRetry = false,
+  }) async {
+    final url = Uri.parse('$_baseUrl$endpoint');
+    final headers = await _getHeaders(token);
+    final bodyJson = jsonEncode(body);
+    return await _makeRequest(
+      () => http.patch(url, headers: headers, body: bodyJson),
+      requestBody: bodyJson,
+      skipAuthRetry: skipAuthRetry,
+    );
+  }
+
   static Future<Map<String, String>> _getHeaders(String? token) async {
-    final headers = {
-      'Content-Type': 'application/json',
-    };
+    final headers = {'Content-Type': 'application/json'};
 
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
@@ -62,11 +85,11 @@ class ApiService {
 
     return headers;
   }
-  
+
   static Future<http.Response> _makeRequest(
     Future<http.Response> Function() request, {
     String? requestBody,
-    bool skipAuthRetry = false
+    bool skipAuthRetry = false,
   }) async {
     // First attempt the request
     var response = await request();
@@ -74,21 +97,21 @@ class ApiService {
     if (response.statusCode == 401 && !skipAuthRetry) {
       debugPrint("Unauthorized request detected, trying to refresh token");
       final refreshed = await AuthService.refreshToken();
-      
+
       if (refreshed) {
         debugPrint("Token refreshed successfully, retrying request");
         final newAccessToken = await AuthService.getAccessToken();
-        
+
         if (newAccessToken != null) {
           // Create new headers with refreshed token
           final headers = await _getHeaders(newAccessToken);
-          
+
           // Recreate the original request
           final originalRequest = response.request;
           if (originalRequest == null) {
             throw TokenExpiredException('Failed to recreate request');
           }
-          
+
           // Create a new request based on the original method
           switch (originalRequest.method) {
             case 'GET':
@@ -105,6 +128,12 @@ class ApiService {
                 headers: headers,
                 body: requestBody, // Use the stored request body
               );
+            case 'PATCH':
+              return await http.patch(
+                originalRequest.url,
+                headers: headers,
+                body: requestBody, // Use the stored request body
+              );
             case 'DELETE':
               return await http.delete(originalRequest.url, headers: headers);
             default:
@@ -112,8 +141,10 @@ class ApiService {
           }
         }
       }
-      
-      throw TokenExpiredException('Failed to refresh token. Please log in again.');
+
+      throw TokenExpiredException(
+        'Failed to refresh token. Please log in again.',
+      );
     }
     return response;
   }
