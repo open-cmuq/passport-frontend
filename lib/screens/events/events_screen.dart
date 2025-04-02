@@ -1,9 +1,11 @@
 // lib/screens/events_screen.dart
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import '../../services/auth_service.dart';
 import '../../services/event_service.dart';
 import '../../models/event_model.dart';
 import 'event_detail_screen.dart';
+import 'create_event_screen.dart';
 
 class EventsScreen extends StatefulWidget {
   @override
@@ -15,6 +17,7 @@ class _EventsScreenState extends State<EventsScreen> {
   List<Event> _events = [];
   bool _isLoading = false;
   bool _hasMore = true;
+  String? _userRole;
   DateTime? _lastEventTime;
   final int _limit = 10; // Smaller batch size for pagination
 
@@ -22,6 +25,7 @@ class _EventsScreenState extends State<EventsScreen> {
   void initState() {
     super.initState();
     _loadInitialEvents();
+    _loadUserRole();
     _scrollController.addListener(_scrollListener);
   }
 
@@ -49,6 +53,11 @@ class _EventsScreenState extends State<EventsScreen> {
       setState(() => _isLoading = false);
       Fluttertoast.showToast(msg: 'Failed to load events: $e');
     }
+  }
+
+  Future<void> _loadUserRole() async {
+    final role = await AuthService.getUserRole();
+    setState(() => _userRole = role);
   }
 
   Future<void> _loadMoreEvents() async {
@@ -106,6 +115,22 @@ class _EventsScreenState extends State<EventsScreen> {
               )
             : null,
       ),
+      floatingActionButton: _userRole == 'admin'
+          ? FloatingActionButton(
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => CreateEventScreen()),
+                );
+
+                if (result == true) {
+                  _refreshEvents();
+                }
+              },
+              child: Icon(Icons.add),
+              backgroundColor: Theme.of(context).primaryColor,
+            )
+          : null,
       body: RefreshIndicator(
         color: theme.primaryColor,
         onRefresh: _refreshEvents,

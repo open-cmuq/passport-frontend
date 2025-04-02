@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'api_service.dart';
 import 'dart:convert';
 import 'user_service.dart';
+import '../models/user_model.dart';
 
 class AuthService {
   static const String _accessTokenKey = 'auth_access_token';
@@ -211,5 +212,15 @@ class AuthService {
 
     return isAccessTokenExpired(accessToken) &&
         isAccessTokenExpired(refreshToken);
+  }
+
+  static Future<String?> getUserRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userData = prefs.getString('user_data');
+
+    if (userData == null) return null;
+
+    final user = User.fromJson(jsonDecode(userData));
+    return user.role;
   }
 }
