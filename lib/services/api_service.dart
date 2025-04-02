@@ -90,10 +90,17 @@ class ApiService {
     Future<http.Response> Function() request, {
     String? requestBody,
     bool skipAuthRetry = false,
+    int redirectCount = 0,
   }) async {
+    const maxRedirects = 5;
+    if (redirectCount >= maxRedirects) {
+      throw Exception('Too many redirects (max $maxRedirects)');
+    }
+
     // First attempt the request
     var response = await request();
 
+    // Handle 401 Unauthorized
     if (response.statusCode == 401 && !skipAuthRetry) {
       debugPrint("Unauthorized request detected, trying to refresh token");
       final refreshed = await AuthService.refreshToken();
@@ -112,40 +119,103 @@ class ApiService {
             throw TokenExpiredException('Failed to recreate request');
           }
 
-          // Create a new request based on the original method
-          switch (originalRequest.method) {
-            case 'GET':
-              return await http.get(originalRequest.url, headers: headers);
-            case 'POST':
-              return await http.post(
-                originalRequest.url,
-                headers: headers,
-                body: requestBody, // Use the stored request body
-              );
-            case 'PUT':
-              return await http.put(
-                originalRequest.url,
-                headers: headers,
-                body: requestBody, // Use the stored request body
-              );
-            case 'PATCH':
-              return await http.patch(
-                originalRequest.url,
-                headers: headers,
-                body: requestBody, // Use the stored request body
-              );
-            case 'DELETE':
-              return await http.delete(originalRequest.url, headers: headers);
-            default:
-              throw TokenExpiredException('Unsupported HTTP method');
+          // Create a new request with refreshed token
+          Future<http.Response> newRequest() {
+            switch (originalRequest.method) {
+              case 'GET':
+                return http.get(originalRequest.url, headers: headers);
+              case 'POST':
+                return http.post(
+                  originalRequest.url,
+                  headers: headers,
+                  body: requestBody,
+                );
+              case 'PUT':
+                return http.put(
+                  originalRequest.url,
+                  headers: headers,
+                  body: requestBody,
+                );
+              case 'PATCH':
+                return http.patch(
+                  originalRequest.url,
+                  headers: headers,
+                  body: requestBody,
+                );
+              case 'DELETE':
+                return http.delete(originalRequest.url, headers: headers);
+              default:
+                throw TokenExpiredException('Unsupported HTTP method');
+            }
           }
+
+          // Retry with new token and return through redirect handler
+          return await _makeRequest(
+            newRequest,
+            requestBody: requestBody,
+            skipAuthRetry: true,
+            redirectCount: redirectCount,
+          );
         }
       }
-
       throw TokenExpiredException(
         'Failed to refresh token. Please log in again.',
       );
     }
+
+    // Handle redirects (3xx status codes)
+    if (response.statusCode >= 300 && response.statusCode < 400) {
+      final location = response.headers['location'];
+      if (location == null) {
+        throw Exception('Redirect location missing in response');
+      }
+
+      final originalRequest = response.request;
+      if (originalRequest == null) {
+        throw Exception('Original request information missing');
+      }
+
+      final newUrl = Uri.parse(location);
+      debugPrint("Redirecting to $newUrl");
+
+      // Create new request for redirect location
+      Future<http.Response> redirectRequest() {
+        switch (originalRequest.method) {
+          case 'GET':
+            return http.get(newUrl, headers: originalRequest.headers);
+          case 'POST':
+            return http.post(
+              newUrl,
+              headers: originalRequest.headers,
+              body: requestBody,
+            );
+          case 'PUT':
+            return http.put(
+              newUrl,
+              headers: originalRequest.headers,
+              body: requestBody,
+            );
+          case 'PATCH':
+            return http.patch(
+              newUrl,
+              headers: originalRequest.headers,
+              body: requestBody,
+            );
+          case 'DELETE':
+            return http.delete(newUrl, headers: originalRequest.headers);
+          default:
+            throw Exception('Unsupported HTTP method for redirect');
+        }
+      }
+
+      return await _makeRequest(
+        redirectRequest,
+        requestBody: requestBody,
+        skipAuthRetry: skipAuthRetry,
+        redirectCount: redirectCount + 1,
+      );
+    }
+
     return response;
   }
 }
