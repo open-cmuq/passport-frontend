@@ -149,6 +149,7 @@ class _EventsScreenState extends State<EventsScreen> {
                   return EventCard(
                     event: _events[index],
                     theme: theme,
+                    onRefresh: _refreshEvents,
                   );
                 },
               ),
@@ -176,8 +177,9 @@ class _EventsScreenState extends State<EventsScreen> {
 class EventCard extends StatelessWidget {
   final Event event;
   final ThemeData theme;
+  final VoidCallback? onRefresh; // Add this line
 
-  const EventCard({required this.event, required this.theme});
+  const EventCard({required this.event, required this.theme, this.onRefresh});
 
   String _formatDate(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
@@ -196,13 +198,18 @@ class EventCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () {
-          Navigator.push(
+        // In EventsScreen, modify where you navigate to EventDetailScreen:
+        onTap: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => EventDetailScreen(event: event),
             ),
           );
+
+          if (result == true && onRefresh != null) {
+            onRefresh!(); // Call the refresh callback
+          }
         },
         child: Padding(
           padding: const EdgeInsets.all(16.0),

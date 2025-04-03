@@ -92,7 +92,7 @@ class EventService {
     }
   }
 
-  static Future<void> deleteEvent(String eventId) async {
+  static Future<void> deleteEvent(int eventId) async {
     final token = await AuthService.getAccessToken();
     if (token == null) throw Exception('User is not authenticated');
 
