@@ -43,41 +43,33 @@ class UserService {
     }
   }
 
-  Future<User> updateCurrentUser(User updatedUser) async {
+  Future<User> getUser(String userId) async {
     try {
-      // Get user ID from access token
-      final accessToken = await AuthService.getAccessToken();
-      if (accessToken == null) {
-        throw Exception('Not authenticated');
+      // Fetch user data
+      final response = await ApiService.get('/users/$userId');
+
+      if (response.statusCode == 200) {
+        return User.fromJson(json.decode(response.body));
+      } else if (response.statusCode == 404) {
+        throw Exception('User not found');
+      } else {
+        throw Exception('Failed to load user data: ${response.statusCode}');
       }
+    } catch (e) {
+      debugPrint('Error fetching user: $e');
+      throw Exception('Failed to load user data: ${e.toString()}');
+    }
+  }
 
-      final parts = accessToken.split('.');
-      if (parts.length != 3) {
-        throw Exception('Invalid token');
-      }
-
-      final payload = json.decode(
-        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
-      );
-
-      final userId = payload['user_id'];
-      if (userId == null) {
-        throw Exception('User ID not found in token');
-      }
-
-      // Prepare update data - include all required fields
-      final updateData = {
+  Future<User> updateUserProfile(User updatedUser) async {
+    try {
+      final response = await ApiService.patch('/users/${updatedUser.id}', {
         'name': updatedUser.name,
-        'email': updatedUser.email,
         'grad_year': updatedUser.gradYear,
         'title': updatedUser.title,
         'biography': updatedUser.biography,
-        // Include other fields that might be required by backend
         'department': updatedUser.department,
-      };
-
-      // Send update request
-      final response = await ApiService.put('/users/$userId', updateData);
+      });
 
       if (response.statusCode == 200) {
         return User.fromJson(json.decode(response.body));
