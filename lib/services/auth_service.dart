@@ -37,42 +37,55 @@ class AuthService {
     }
   }
 
-  static Future<bool> register(
+  static Future<Map<String, dynamic>> register(
     String name,
     String email,
     String password,
   ) async {
-    final validEmail = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@(andrew\.cmu\.edu|qatar\.cmu\.edu|cmu\.edu)$',
-    );
-    if (!validEmail.hasMatch(email)) {
-      throw Exception(
-        "Email must be from @andrew.cmu.edu, @qatar.cmu.edu, or @cmu.edu",
+    try {
+      final validEmail = RegExp(
+        r'^[a-zA-Z0-9._%+-]+@(andrew\.cmu\.edu|qatar\.cmu\.edu|cmu\.edu)$',
       );
-    }
-
-    final response = await ApiService.post('/register', {
-      'name': name,
-      'email': email,
-      'password': password,
-    });
-
-    if (response.statusCode == 200) {
-      if (dotenv.get('ENV') == 'development') {
-        final tokens = jsonDecode(response.body);
-        await _saveTokens(tokens['access_token'], tokens['refresh_token']);
-        await UserService().cacheCurrentUser();
-        //TODO Complete impelemntation to redirect and handle OTP stuff
-      } else {
-        print("OTP sent for verification");
+      if (!validEmail.hasMatch(email)) {
+        return {'success': false, 'message': 'Invalid email domain'};
       }
-      return true;
+
+      final response = await ApiService.post('/register', {
+        'name': name,
+        'email': email,
+        'password': password,
+      });
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+
+        if (dotenv.get('ENV') == 'development') {
+          await _saveTokens(
+            responseData['access_token'],
+            responseData['refresh_token'],
+          );
+          await UserService().cacheCurrentUser();
+          return {'success': true, 'requiresOTP': false};
+        } else {
+          return {'success': true, 'requiresOTP': true};
+        }
+      } else {
+        final errorResponse = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorResponse['error'] ?? 'Registration failed'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Registration failed: ${e.toString()}'
+      };
     }
-    return false;
   }
 
   static Future<bool> verifyOTP(String email, String otp) async {
-    final response = await ApiService.post('/verify-OTP', {
+    final response = await ApiService.post('/verify-otp', {
       'email': email,
       'otp': otp,
     });
@@ -83,6 +96,100 @@ class AuthService {
       return true;
     }
     return false;
+  }
+
+  static Future<String?> resendOTP(String email) async {
+    try {
+      final response = await ApiService.post('/resend-otp', {
+        'email': email,
+      });
+
+      if (response.statusCode == 200) {
+        return null; // Success
+      } else if (response.statusCode == 429) {
+        final errorResponse = jsonDecode(response.body);
+        final retryAfter = errorResponse['retry_after']?.toDouble() ?? 30.0;
+        return 'Please wait ${retryAfter.toStringAsFixed(0)} seconds before resending';
+      } else {
+        final errorResponse = jsonDecode(response.body);
+        return errorResponse['error'] ?? 'Failed to resend OTP';
+      }
+    } catch (e) {
+      return 'Failed to resend OTP: ${e.toString()}';
+    }
+  }
+
+  static Future<String?> changePassword(
+    String oldPassword,
+    String newPassword,
+  ) async {
+    try {
+      final response = await ApiService.post('/change-password', {
+        'old_password': oldPassword,
+        'new_password': newPassword,
+      });
+
+      if (response.statusCode == 200) {
+        // Password changed successfully - update tokens
+        final tokens = jsonDecode(response.body);
+        await _saveTokens(tokens['access_token'], tokens['refresh_token']);
+        return null;
+      } else if (response.statusCode == 401) {
+        return 'Invalid old password';
+      } else {
+        final errorResponse = jsonDecode(response.body);
+        return errorResponse['error'] ?? 'Password change failed';
+      }
+    } catch (e) {
+      return 'Password change failed: ${e.toString()}';
+    }
+  }
+
+  static Future<String?> forgotPassword(String email) async {
+    try {
+      final response = await ApiService.post('/forgot-password', {
+        'email': email,
+      });
+
+      if (response.statusCode == 200) {
+        return null; // Success - always return success regardless of email existence
+      } else if (response.statusCode == 429) {
+        final errorResponse = jsonDecode(response.body);
+        final retryAfter = errorResponse['retry_after']?.toDouble() ?? 30.0;
+        return 'Please wait ${retryAfter.toStringAsFixed(0)} seconds before requesting new OTP';
+      } else {
+        return 'Failed to initiate password reset';
+      }
+    } catch (e) {
+      return 'Failed to initiate password reset: ${e.toString()}';
+    }
+  }
+
+  static Future<String?> resetPassword(
+    String email,
+    String otp,
+    String newPassword,
+  ) async {
+    try {
+      final response = await ApiService.post('/reset-password', {
+        'email': email,
+        'otp': otp,
+        'password': newPassword,
+      });
+
+      if (response.statusCode == 200) {
+        // Password reset successful - clear existing tokens
+        await logout();
+        return null;
+      } else if (response.statusCode == 400) {
+        final errorResponse = jsonDecode(response.body);
+        return errorResponse['error'] ?? 'Invalid OTP or expired';
+      } else {
+        return 'Password reset failed';
+      }
+    } catch (e) {
+      return 'Password reset failed: ${e.toString()}';
+    }
   }
 
   static Future<void> _saveTokens(
