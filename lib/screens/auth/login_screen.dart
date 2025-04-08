@@ -1,21 +1,26 @@
+// lib/screens/auth/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import 'register_screen.dart';
-import 'otp_screen.dart';
-import '../main_screen.dart';
+import 'forgot_password_screen.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
+  @override
+  _LoginScreenState createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.green[50],
       body: Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -43,6 +48,7 @@ class LoginScreen extends StatelessWidget {
               SizedBox(height: 30),
               TextField(
                 controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: 'Email',
                   prefixIcon: Icon(Icons.email, color: Colors.green[700]),
@@ -67,7 +73,27 @@ class LoginScreen extends StatelessWidget {
                   fillColor: Colors.white,
                 ),
               ),
-              SizedBox(height: 20),
+              SizedBox(height: 10),
+              // Forgot Password Link
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ForgotPasswordScreen(),
+                    ),
+                  ),
+                  child: Text(
+                    'Forgot Password?',
+                    style: TextStyle(
+                      color: Colors.green[700],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 10),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green[700],
@@ -76,44 +102,37 @@ class LoginScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                onPressed: () async {
-                  final email = _emailController.text.trim();
-                  final password = _passwordController.text.trim();
-                  
-                  if (email.isEmpty || password.isEmpty) {
-                    Fluttertoast.showToast(msg: 'Please fill all fields');
-                    return;
-                  }
-
-                  final errorMessage = await AuthService.login(email, password);
-                  
-                  if (errorMessage == null) {
-                    // Success case
-                    Navigator.pushReplacementNamed(context, '/home');
-                  } else {
-                    // Show specific error message from backend
-                    Fluttertoast.showToast(
-                      msg: errorMessage,
-                      toastLength: Toast.LENGTH_LONG,
-                      gravity: ToastGravity.BOTTOM,
-                      backgroundColor: Colors.red,
-                      textColor: Colors.white
-                    );
-                    // Clear password field on error
-                    _passwordController.clear();
-                  }
-                },
-                child: Text(
-                  'Login',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
+                onPressed: _isLoading ? null : _handleLogin,
+                child: _isLoading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text(
+                        'Login',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
               ),
               SizedBox(height: 15),
               TextButton(
-                onPressed: () => Navigator.pushReplacementNamed(context, '/register'),
+                onPressed: _isLoading
+                    ? null
+                    : () =>
+                        Navigator.pushReplacementNamed(context, '/register'),
                 child: Text(
                   "Don't have an account? Register",
-                  style: TextStyle(color: Colors.green[800], fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Colors.green[800],
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -121,5 +140,50 @@ class LoginScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      Fluttertoast.showToast(msg: 'Please fill all fields');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final errorMessage = await AuthService.login(email, password);
+
+      if (errorMessage == null) {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        Fluttertoast.showToast(
+          msg: errorMessage,
+          toastLength: Toast.LENGTH_LONG,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+        _passwordController.clear();
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Login failed. Please try again.',
+        toastLength: Toast.LENGTH_LONG,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
