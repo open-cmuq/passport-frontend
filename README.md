@@ -1,16 +1,17 @@
-# passport_frontend
+# EcoCampus Passport
+This is the cross platform mobile app powering the ecocampus passport and is part of our green 
+initiatives offerings.
 
-A new Flutter project.
+# Development
 
-## Getting Started
 
-This project is a starting point for a Flutter application.
+# Contributing
+Ecocampus Passport is open to contributions and if you're interested in working on this project
+please contact CMU-Q facilities department. We welcome pull requests but to ensure it gets
+merged we recommend you to first speak to facilities and get permission on whatever you're planning
+on working on. PRs which fix bugs are an exception to this. 
 
-A few resources to get you started if this is your first Flutter project:
+When contributing please follow [Commit Message Guidlines](https://gist.github.com/robertpainsi/b632364184e70900af4ab688decf6f53).
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+# License
+This project is licensed under the [MIT License](LICENSE).
