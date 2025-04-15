@@ -132,6 +132,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _handleRegistration() async {
+    if (!mounted) return; // Check if widget is still in the tree
+
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -152,13 +154,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final result = await AuthService.register(name, email, password);
 
+      if (!mounted) return; // Check again after async operation
+
       if (result['success'] == true) {
         if (result['requiresOTP'] == true) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => OTPScreen(),
-              settings: RouteSettings(arguments: email),
+              builder: (context) => OTPScreen(email: email),
             ),
           );
         } else {
@@ -171,10 +174,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       }
     } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'An error occurred: ${e.toString()}',
-        toastLength: Toast.LENGTH_LONG,
-      );
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: 'An error occurred: ${e.toString()}',
+          toastLength: Toast.LENGTH_LONG,
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

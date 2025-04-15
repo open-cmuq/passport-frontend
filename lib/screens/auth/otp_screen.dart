@@ -4,6 +4,10 @@ import 'package:fluttertoast/fluttertoast.dart';
 import '../../services/auth_service.dart';
 
 class OTPScreen extends StatefulWidget {
+  final String email;
+
+  const OTPScreen({Key? key, required this.email}) : super(key: key);
+
   @override
   _OTPScreenState createState() => _OTPScreenState();
 }
@@ -13,12 +17,10 @@ class _OTPScreenState extends State<OTPScreen> {
   bool _isLoading = false;
   bool _isResending = false;
   int _resendCooldown = 30;
-  late String _email;
 
   @override
   void initState() {
     super.initState();
-    _email = ModalRoute.of(context)!.settings.arguments as String;
     _startCooldownTimer();
   }
 
@@ -59,7 +61,7 @@ class _OTPScreenState extends State<OTPScreen> {
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
             Text(
-              _email,
+              widget.email,
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 30),
@@ -152,9 +154,12 @@ class _OTPScreenState extends State<OTPScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final success = await AuthService.verifyOTP(_email, otp);
+      final success = await AuthService.verifyOTP(widget.email, otp);
       if (success) {
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/home',
+          (Route<dynamic> route) => false, // This removes all previous routes
+        );
       } else {
         Fluttertoast.showToast(
           msg: 'Invalid or expired OTP. Please try again.',
@@ -180,7 +185,7 @@ class _OTPScreenState extends State<OTPScreen> {
     });
 
     try {
-      final error = await AuthService.resendOTP(_email);
+      final error = await AuthService.resendOTP(widget.email);
       if (error != null) {
         Fluttertoast.showToast(msg: error);
       } else {

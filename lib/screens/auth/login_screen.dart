@@ -125,8 +125,11 @@ class _LoginScreenState extends State<LoginScreen> {
               TextButton(
                 onPressed: _isLoading
                     ? null
-                    : () =>
-                        Navigator.pushReplacementNamed(context, '/register'),
+                    : () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => RegisterScreen()),
+                        ),
                 child: Text(
                   "Don't have an account? Register",
                   style: TextStyle(

@@ -187,7 +187,6 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => LoginScreen(),
         '/register': (context) => RegisterScreen(),
-        '/otp': (context) => OTPScreen(),
         '/home': (context) => MainScreen(),
       },
     );
