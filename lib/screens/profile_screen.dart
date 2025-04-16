@@ -1,6 +1,7 @@
 // lib/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart'; // Add this import
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../../models/user_model.dart';
@@ -378,7 +379,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildQrCodeSection(User user) {
+    if (!_isCurrentUser || _isEditing) return SizedBox.shrink();
+
+    final qrData = 'user:${user.id}:${user.email}';
+
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: 16),
+      elevation: 2,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text(
+              'Your QR Code',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            SizedBox(height: 16),
+            QrImageView(
+              data: qrData,
+              version: QrVersions.auto,
+              size: 200,
+              backgroundColor: Colors.white,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Scan this code to share your profile',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProfileInformationSection(User user) {
+    // Don't show profile details for current user unless editing
+    if (_isCurrentUser && !_isEditing) return SizedBox.shrink();
+
     return Card(
       margin: EdgeInsets.symmetric(vertical: 16),
       elevation: 2,
@@ -498,6 +541,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   _buildProfileHeader(user),
                   _buildPointsSection(user),
+                  _buildQrCodeSection(user),
                   _buildProfileInformationSection(user),
                   if (_isCurrentUser && _isEditing) _buildSecuritySection(),
                   _buildActionButtons(user),
