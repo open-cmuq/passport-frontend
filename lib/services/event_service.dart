@@ -107,4 +107,53 @@ class EventService {
       throw Exception('Failed to delete event: $e');
     }
   }
+
+  static Future<Map<String, dynamic>> addAttendance({
+    required String eventId,
+    required List<String> identifiers,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    if (token == null) throw Exception('User is not authenticated');
+
+    // Validate identifiers (either emails or numeric user IDs)
+    final validIdentifiers = identifiers.where((identifier) {
+      return identifier.contains('@') || // Simple email check
+          RegExp(r'^\d+$').hasMatch(identifier); // Numeric ID check
+    }).toList();
+
+    if (validIdentifiers.isEmpty) {
+      throw Exception('No valid identifiers provided');
+    }
+
+    final body = {
+      'identifiers': validIdentifiers,
+    };
+
+    try {
+      final response = await ApiService.post(
+        '/events/$eventId/attendances',
+        body,
+        token: token,
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Attendance processed',
+          'newAttendees': data['new_attendees'] ?? 0,
+          'duplicates': data['duplicates'] ?? 0,
+          'pointsAdded': data['points_added'] ?? 0,
+          'newAwardsGranted': data['new_awards_granted'] ?? 0,
+          'processedUsers': List<String>.from(data['processed_users'] ?? []),
+          'invalidIdentifiers':
+              List<String>.from(data['invalid_identifiers'] ?? []),
+        };
+      } else {
+        throw Exception('Failed to add attendance: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Failed to add attendance: $e');
+    }
+  }
 }
